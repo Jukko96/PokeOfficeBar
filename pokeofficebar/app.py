@@ -32,7 +32,7 @@ WORK_TIMES = {
 }
 MINUTES_PER_DAY = 24 * 60
 ITEM_SPRITES = {
-    "gift_box": "gift-box", "rare_candy": "rare-candy", "mint": "ability-urge",
+    "gift_box": "gift-box", "rare_candy": "rare-candy", "mint": "adamant-mint",
     "shiny_charm": "shiny-charm", "soothe_bell": "soothe-bell", "incense": "incense",
 }
 
@@ -533,7 +533,7 @@ class App:
         name = ITEM_SPRITES.get(item_key)
         path = self.dex.item_sprite_path(name, fetch=False) if name else None
         if path is None:
-            if name and item_key != "incense":
+            if name:
                 self._queue_image(("item", name))
             fallback = item_art(item_key)
             return _fit(fallback, size) if fallback is not None else None

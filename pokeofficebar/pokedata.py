@@ -13,6 +13,7 @@ import sys
 import threading
 from dataclasses import dataclass, field
 from functools import lru_cache
+from hashlib import sha256
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -24,6 +25,11 @@ POKEMON_SPRITE_BASE = "https://raw.githubusercontent.com/PokeAPI/sprites/master/
 SPRITE_BASE = f"{POKEMON_SPRITE_BASE}/versions/generation-v/black-white/animated"
 ITEM_BASE = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items"
 EGG_URL = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/egg.png"
+INCENSE_URL = (
+    "https://www.pokemon.com/static-assets/content-assets/cms2/img/"
+    "video-games/_tiles/pokemon-go/2025/11/07/inline/05.png"
+)
+LEGACY_MINT_SHA256 = "a204e085941e9524f85311967ec14039004c8b4aef6caaebf6426f780f7e2e58"
 
 MAX_GENERATION = 5          # Gen 1-5 have animated sprites
 LANG_EN, LANG_KO = "9", "3"
@@ -235,9 +241,16 @@ class Pokedex:
                     tmp.unlink(missing_ok=True)
 
     def item_sprite_path(self, item_name: str, *, fetch: bool = True) -> Path | None:
-        """Local path to a PokeAPI item sprite (e.g. 'rare-candy')."""
+        """Find the item image locally or fetch it from its source."""
         filename = f"{item_name}.png"
-        return self._item_path(filename, f"{ITEM_BASE}/{filename}", fetch=fetch)
+        if item_name == "adamant-mint" and self._bundled_file("items", filename) is None:
+            # Older offline packs used this filename for the real mint sprite.
+            # Ignore the actual Ability Urge sprite served under the same name.
+            legacy = self._bundled_file("items", "ability-urge.png")
+            if legacy is not None and sha256(legacy.read_bytes()).hexdigest() == LEGACY_MINT_SHA256:
+                return legacy
+        url = INCENSE_URL if item_name == "incense" else f"{ITEM_BASE}/{filename}"
+        return self._item_path(filename, url, fetch=fetch)
 
     def egg_sprite_path(self, shiny: bool = False, *, fetch: bool = True) -> Path | None:
         """The egg shown before a companion hatches, fetched like any sprite."""
