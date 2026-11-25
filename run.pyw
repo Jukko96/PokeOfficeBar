@@ -48,6 +48,8 @@ if __name__ == "__main__":
         sys.exit(result)
     except Exception as error:
         logging.exception("Application could not start or finish normally")
+        if sys.argv[1:2] in (["--apply-update"], ["--update-restarted"]):
+            sys.exit(1)
         import ctypes
         ctypes.windll.user32.MessageBoxW(None,
             "프로그램을 실행하지 못했습니다. 오류 로그를 확인해 주세요.\n"

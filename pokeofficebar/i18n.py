@@ -303,6 +303,8 @@ STRINGS: dict[str, dict[str, str]] = {
     "updates.unavailable": {"ko": "버전 확인을 마치지 못했습니다", "en": "Could not check for updates"},
     "updates.current": {"ko": "최신 버전입니다", "en": "Up to date"},
     "updates.available": {"ko": "새 버전 {version}을 받을 수 있습니다.", "en": "Version {version} is available."},
+    "updates.installing": {"ko": "{version} 업데이트 준비 중", "en": "Preparing update {version}"},
+    "updates.install_failed": {"ko": "자동 업데이트에 실패했습니다.", "en": "Automatic update failed."},
     "updates.download": {"ko": "다운로드", "en": "Download"},
     "work_timer.lunch": {"ko": "식사까지 {time}", "en": "Lunch in {time}"},
     "work_timer.resume": {"ko": "다음 근무까지 {time}", "en": "Work resumes in {time}"},

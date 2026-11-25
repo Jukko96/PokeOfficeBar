@@ -23,7 +23,7 @@ from .i18n import set_lang, t
 from .persistence import atomic_json, read_json
 from .pokedata import Pokedex
 from .startup import set_startup
-from .updates import check_for_update
+from .updates import StagedUpdate, check_for_update, discard_stage, download_update
 
 ROAM_OFF, ROAM_SCREEN, ROAM_TASKBAR = "off", "screen", "taskbar"
 WORK_TIMES = {
@@ -32,7 +32,7 @@ WORK_TIMES = {
 }
 MINUTES_PER_DAY = 24 * 60
 ITEM_SPRITES = {
-    "gift_box": "gift-box", "rare_candy": "rare-candy", "mint": "adamant-mint",
+    "rare_candy": "rare-candy", "mint": "adamant-mint",
     "shiny_charm": "shiny-charm", "soothe_bell": "soothe-bell", "incense": "incense",
 }
 
@@ -251,9 +251,10 @@ class App:
         self._office_was_unlocked = False
         self.error: str | None = None
         self.startup_error = False
-        self.version_checking = True
-        self.version_check_failed = False
+        self.update_status = "checking"
         self.available_version: str | None = None
+        self._staged_update: StagedUpdate | None = None
+        self._update_lock = threading.Lock()
         self.listeners: list = []
         self._frame_cache = OrderedDict()
         self._still_cache = OrderedDict()
@@ -332,7 +333,7 @@ class App:
         self.request_refresh([message])
         return True
 
-    def start(self) -> None:
+    def start(self, *, check_updates: bool = True) -> None:
         if self.dex.has_local_tables():
             self._load_profile()
         else:
@@ -340,18 +341,45 @@ class App:
         self._image_worker = threading.Thread(target=self._fetch_images,
                                               name="pokeofficebar-assets", daemon=True)
         self._image_worker.start()
-        threading.Thread(target=self._check_release, name="pokeofficebar-version", daemon=True).start()
+        if check_updates:
+            threading.Thread(target=self._check_release, name="pokeofficebar-version", daemon=True).start()
 
     def _check_release(self) -> None:
         try:
-            self.available_version = check_for_update()
+            release = check_for_update()
         except (RequestException, ValueError) as exc:
-            self.version_check_failed = True
             logging.info("Could not check latest version: %s", _brief(exc))
-        finally:
-            self.version_checking = False
-        events = [t("updates.available", version=self.available_version)] if self.available_version else []
-        self._notify(events)
+            self.update_status = "unavailable"
+            self._notify()
+            return
+        if release is None:
+            self.update_status = "current"
+            self._notify()
+            return
+        self.available_version = release.version
+        if not getattr(sys, "frozen", False) or release.url is None:
+            self.update_status = "available"
+            self._notify()
+            return
+        self.update_status = "installing"
+        self._notify()
+        try:
+            update = download_update(release, Path(sys.executable).resolve(), self._image_stop)
+            if update is not None:
+                with self._update_lock:
+                    if self._image_stop.is_set():
+                        discard_stage(update.directory)
+                    else:
+                        self._staged_update = update
+        except (OSError, RequestException, ValueError):
+            logging.exception("Could not download the verified update")
+            self.update_status = "install_failed"
+        self._notify()
+
+    def take_staged_update(self) -> StagedUpdate | None:
+        with self._update_lock:
+            update, self._staged_update = self._staged_update, None
+            return update
 
     def _load_profile(self) -> bool:
         try:
@@ -416,14 +444,20 @@ class App:
         else:
             self.startup_error = False
 
-    def stop(self) -> None:
+    def stop(self, *, restarting: bool = False) -> None:
         self._image_stop.set()
+        update = self.take_staged_update()
+        if update is not None:
+            try:
+                discard_stage(update.directory)
+            except OSError:
+                logging.exception("Could not remove the unused update")
         self._image_jobs.put(None)
         if self._image_worker is not None:
             self._image_worker.join(timeout=.2)
         if not self.game.initialized:
             return
-        if self.game.incense_status()[0]:
+        if not restarting and self.game.incense_status()[0]:
             self.game.toggle_incense()
         self.game.save()
 
@@ -531,8 +565,11 @@ class App:
             self._item_cache.move_to_end(cache_key)
             return self._item_cache[cache_key]
         name = ITEM_SPRITES.get(item_key)
-        path = self.dex.item_sprite_path(name, fetch=False) if name else None
-        if path is None:
+        if item_key == "gift_box":
+            path = asset_dir() / "gift-box.png"
+        else:
+            path = self.dex.item_sprite_path(name, fetch=False) if name else None
+        if path is None or not path.is_file():
             if name:
                 self._queue_image(("item", name))
             fallback = item_art(item_key)

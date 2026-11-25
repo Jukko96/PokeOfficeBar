@@ -8,7 +8,7 @@ Windows에서 일하는 동안 바탕화면의 작은 친구를 키우는 앱입
 
 처음에는 도감과 이미지를 가져오기 위해 인터넷에 연결해 주세요. PokeTokenBar를 실행 중이라면 트레이에서 종료한 뒤 열면 기존 회사원 모드 세이브를 이어서 사용할 수 있습니다.
 
-앱을 열 때 GitHub의 최신 정식 버전을 확인합니다. 새 버전이 있으면 홈의 **다운로드** 버튼으로 릴리스 페이지를 열 수 있습니다.
+앱을 열 때 GitHub의 최신 정식 버전을 확인합니다. 새 버전이 있으면 실행 파일을 내려받고 검증한 뒤 자동으로 교체하고 다시 엽니다. 자동 업데이트를 완료하지 못하면 홈의 **다운로드** 버튼으로 릴리스 페이지를 열 수 있습니다. 이전 버전에서 이 기능을 처음 사용하려면 이 버전의 EXE로 한 번 교체해 주세요.
 
 ## 주요 기능
 
@@ -52,4 +52,4 @@ py -m venv .venv
 
 [PokeTokenBar for Windows](https://github.com/NMHK-134711/PokeTokenBar-for-Windows)를 기반으로 했습니다. Windows판의 출발점은 [chattymin/PokeTokenBar](https://github.com/chattymin/PokeTokenBar)의 아이디어입니다. 기반 코드의 MIT 저작권 고지와 라이선스 전문은 [LICENSE](LICENSE)에 있습니다.
 
-도감과 스프라이트의 출처는 [PokéAPI](https://pokeapi.co/)입니다. 향로 아이콘은 [Pokémon GO 공식 자료](https://www.pokemon.com/static-assets/content-assets/cms2/img/video-games/_tiles/pokemon-go/2025/11/07/inline/05.png)에서 가져옵니다. 포켓몬 이미지와 데이터의 권리는 각 권리자에게 있으며, 기본 소스와 빌드에는 포켓몬 이미지 팩을 넣지 않습니다. 안개씨와 대체 아이콘은 `pokeofficebar/art.py`에서 그립니다. 탐험 배경은 이 프로젝트용으로 생성한 이미지입니다.
+도감과 스프라이트의 출처는 [PokéAPI](https://pokeapi.co/)입니다. 향로 아이콘은 [Pokémon GO 공식 자료](https://www.pokemon.com/static-assets/content-assets/cms2/img/video-games/_tiles/pokemon-go/2025/11/07/inline/05.png)에서 가져옵니다. 포켓몬 이미지와 데이터의 권리는 각 권리자에게 있으며, 기본 소스와 빌드에는 포켓몬 이미지 팩을 넣지 않습니다. 안개씨와 대체 아이콘은 `pokeofficebar/art.py`에서 그립니다. 선물 아이콘과 탐험 배경은 이 프로젝트용으로 생성한 이미지입니다.

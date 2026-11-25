@@ -794,18 +794,20 @@ class MainWindow(tk.Toplevel):
 
     def _refresh_version(self) -> None:
         app = self.app
-        version = app.available_version
-        if version:
-            result = t("updates.available", version=version)
+        status = app.update_status
+        result = t(f"updates.{status}", version=app.available_version)
+        if status in {"available", "installing", "install_failed"}:
             self._update_message.configure(text=result)
-            self._update_link.configure(text=t("updates.download"))
+            if status == "installing":
+                self._update_link.pack_forget()
+            else:
+                self._update_link.configure(text=t("updates.download"))
+                if not self._update_link.winfo_manager():
+                    self._update_link.pack(side="right")
             if not self._update_row.winfo_manager():
                 self._update_row.pack(fill="x", padx=16, pady=(4, 0), before=self.event_lbl)
         else:
             self._update_row.pack_forget()
-            key = ("updates.checking" if app.version_checking else
-                   "updates.unavailable" if app.version_check_failed else "updates.current")
-            result = t(key)
         self._version_details.configure(text=f"v{__version__} · {result}")
 
     def _render_office(self, events) -> None:

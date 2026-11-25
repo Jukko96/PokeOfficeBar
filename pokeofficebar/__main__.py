@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 import sys
+from threading import Thread
 import tkinter as tk
 from dataclasses import replace
 from queue import Empty, SimpleQueue
@@ -15,6 +17,9 @@ from .game import ExpeditionReturnNotice
 from .startup import STARTUP_ARGUMENT
 from .tray import Tray
 from .ui import FloatingPet, MainWindow
+from .update_install import (FAILED_ARGUMENT, INSTALL_ARGUMENT, RESTART_ARGUMENT,
+                             finish_restart, install_update, is_stage, launch_installer)
+from .updates import discard_stage
 from .visitors import DesktopVisits
 
 
@@ -47,16 +52,18 @@ def _claim_single_instance():
     return handle
 
 
-def _run_session(root, *, from_startup: bool) -> None:
+def _run_session(root, *, from_startup: bool, restarted_from: Path | None, update_failed: bool) -> None:
     app = App()
-    if from_startup:
+    if restarted_from is not None:
+        app.update_status = "install_failed" if update_failed else "current"
+    elif from_startup:
         if not app.config.start_with_windows:
             return
     else:
         app.sync_windows_startup()
     window = MainWindow(root, app)
     visits = DesktopVisits(root, app, window.refresh_incense)
-    state = {"pet": None, "quitting": False}
+    state = {"pet": None, "quitting": False, "restarting": False}
     mailbox = SimpleQueue()
     jobs = {"poll": None, "office": None}
 
@@ -181,6 +188,24 @@ def _run_session(root, *, from_startup: bool) -> None:
                 logging.exception("UI action %s failed", action)
             if state["quitting"]:
                 return
+        update = app.take_staged_update()
+        if update is not None:
+            try:
+                if app.game.initialized:
+                    app.game.save()
+                launch_installer(update, from_startup=from_startup)
+            except OSError:
+                logging.exception("Could not start the update installer")
+                try:
+                    discard_stage(update.directory)
+                except OSError:
+                    logging.exception("Could not remove the unused update")
+                app.update_status = "install_failed"
+                apply([])
+            else:
+                state["restarting"] = True
+                quit_app()
+                return
         jobs["poll"] = root.after(75, poll)
 
     # These callbacks retain only a plain queue, never a Tk object or bound widget method.
@@ -197,11 +222,14 @@ def _run_session(root, *, from_startup: bool) -> None:
     window.bind("<<IncenseChanged>>", lambda _e: visits.sync())
 
     tray.start()
-    app.start()
+    app.start(check_updates=restarted_from is None)
     jobs["office"] = root.after(0, office_tick)
     jobs["poll"] = root.after(0, poll)
     if not from_startup:
         window.show()
+    if restarted_from is not None:
+        root.after_idle(lambda: Thread(target=finish_restart, args=(restarted_from,),
+                                       name="pokeofficebar-update-cleanup", daemon=True).start())
 
     try:
         root.mainloop()
@@ -212,7 +240,7 @@ def _run_session(root, *, from_startup: bool) -> None:
         app.listeners.clear()
         visits.close()
         try:
-            app.stop()
+            app.stop(restarting=state["restarting"])
         except Exception:
             logging.exception("Session could not be saved during shutdown")
         tray.stop()
@@ -224,6 +252,20 @@ def _run_session(root, *, from_startup: bool) -> None:
 
 
 def main() -> int:
+    args = sys.argv[1:]
+    from_startup = STARTUP_ARGUMENT in args
+    if args[:1] == [INSTALL_ARGUMENT]:
+        if len(args) < 3:
+            return 1
+        return install_update(Path(args[1]).resolve(), args[2], from_startup=from_startup)
+    restarted_from = None
+    if args[:1] == [RESTART_ARGUMENT]:
+        if len(args) < 2 or not getattr(sys, "frozen", False):
+            return 1
+        stage = Path(args[1]).resolve()
+        if not is_stage(stage, Path(sys.executable).resolve()):
+            return 1
+        restarted_from = stage
     lock = _claim_single_instance()
     if lock is None:
         return 0
@@ -235,10 +277,12 @@ def main() -> int:
 
     root.report_callback_exception = callback_error
     try:
-        _run_session(root, from_startup=STARTUP_ARGUMENT in sys.argv[1:])
+        _run_session(root, from_startup=from_startup, restarted_from=restarted_from,
+                     update_failed=FAILED_ARGUMENT in args)
         return 0
     finally:
         root.destroy()
+        lock.close()
 
 
 if __name__ == "__main__":
