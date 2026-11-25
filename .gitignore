@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Build output
+build/
+dist/
+*.spec
+pokemon_data/
+
+# Local environment and user data
+.env
+.env.*
+*.log
+config.json
+office-save.json
+instance.lock
