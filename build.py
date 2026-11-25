@@ -10,6 +10,7 @@ Python install required on the target machine.
 from __future__ import annotations
 
 import argparse
+import ssl
 import subprocess
 import sys
 from tempfile import NamedTemporaryFile
@@ -134,6 +135,11 @@ def main() -> int:
     ]
     if args.pokemon_data is not None:
         cmd.extend(("--add-data", f"{args.pokemon_data.resolve(strict=True)}:pokemon_data"))
+    # Some Python runtimes load a local certificate distrust list from ssl.py.
+    # Ship that runtime file alongside ssl.py so its HTTPS checks still work.
+    runtime_distrust = Path(ssl.__file__).with_name("codex-rejected-cas.pem")
+    if runtime_distrust.is_file():
+        cmd.extend(("--add-data", f"{runtime_distrust}:."))
     cmd.append(str(launcher))
     print("running   -> PyInstaller")
     result = subprocess.run(cmd, cwd=ROOT)

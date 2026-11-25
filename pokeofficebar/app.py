@@ -15,6 +15,7 @@ from queue import SimpleQueue
 from time import monotonic
 
 from PIL import Image, ImageSequence
+from requests import RequestException
 
 from .art import FOG_VISITOR_ID, fog_visitor_frames, item_art
 from .game import CandyUseNotice, Game
@@ -22,6 +23,7 @@ from .i18n import set_lang, t
 from .persistence import atomic_json, read_json
 from .pokedata import Pokedex
 from .startup import set_startup
+from .updates import check_for_update
 
 ROAM_OFF, ROAM_SCREEN, ROAM_TASKBAR = "off", "screen", "taskbar"
 WORK_TIMES = {
@@ -249,6 +251,9 @@ class App:
         self._office_was_unlocked = False
         self.error: str | None = None
         self.startup_error = False
+        self.version_checking = True
+        self.version_check_failed = False
+        self.available_version: str | None = None
         self.listeners: list = []
         self._frame_cache = OrderedDict()
         self._still_cache = OrderedDict()
@@ -335,6 +340,18 @@ class App:
         self._image_worker = threading.Thread(target=self._fetch_images,
                                               name="pokeofficebar-assets", daemon=True)
         self._image_worker.start()
+        threading.Thread(target=self._check_release, name="pokeofficebar-version", daemon=True).start()
+
+    def _check_release(self) -> None:
+        try:
+            self.available_version = check_for_update()
+        except (RequestException, ValueError) as exc:
+            self.version_check_failed = True
+            logging.info("Could not check latest version: %s", _brief(exc))
+        finally:
+            self.version_checking = False
+        events = [t("updates.available", version=self.available_version)] if self.available_version else []
+        self._notify(events)
 
     def _load_profile(self) -> bool:
         try:

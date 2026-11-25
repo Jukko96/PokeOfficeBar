@@ -8,6 +8,7 @@ an optional always-on-top floating pet.
 from __future__ import annotations
 
 import tkinter as tk
+import webbrowser
 from datetime import datetime
 from dataclasses import replace
 from functools import wraps
@@ -18,6 +19,7 @@ from tkinter import ttk
 
 from PIL import Image, ImageFilter, ImageOps, ImageTk
 
+from . import __version__
 from .app import ROAM_OFF, ROAM_TASKBAR, WORK_TIMES, asset_dir, normalize_work_time
 from .desktop import move_window, pet_window, pointer_over, prevent_activation
 from .game import (
@@ -25,6 +27,7 @@ from .game import (
     RARITY_ORDER, MAX_SHINY_CHARMS, MAX_SOOTHE_BELLS,
 )
 from .i18n import nature as tr_nature, rarity as tr_rarity, set_lang, t
+from .updates import RELEASES_PAGE
 
 BG = "#16171d"
 PANEL = "#1e2028"
@@ -590,6 +593,12 @@ class MainWindow(tk.Toplevel):
         self.event_lbl = tk.Label(self.home, bg=PANEL, fg=GOOD, wraplength=420,
                                   justify="left", font=("Segoe UI", 9), anchor="w")
         self.event_lbl.pack(fill="x", padx=16, pady=10)
+        self._update_row = tk.Frame(self.home, bg=PANEL)
+        self._update_message = tk.Label(self._update_row, bg=PANEL, fg=ACCENT, anchor="w")
+        self._update_message.pack(side="left", fill="x", expand=True)
+        self._update_link = _action(self._update_row, "", lambda: webbrowser.open(RELEASES_PAGE), True)
+        self._update_link.configure(width=0, padx=8)
+        self._update_link.pack(side="right")
 
     # ---- settings --------------------------------------------------
 
@@ -675,6 +684,9 @@ class MainWindow(tk.Toplevel):
         self.settings_msg.pack(fill="x", pady=(8, 0))
         if self.app.startup_error:
             self.settings_msg.configure(text=t("set.startup_failed"), fg="#e0665f")
+        self._version_details = tk.Label(wrap, bg=PANEL, fg=MUTED, anchor="w")
+        self._version_details.pack(fill="x", pady=(10, 0))
+        self._refresh_version()
 
     def _save_settings(self) -> None:
         cfg = replace(self.app.config)
@@ -740,6 +752,7 @@ class MainWindow(tk.Toplevel):
     def render(self, events: list[str]) -> None:
         app, game = self.app, self.app.game
         lang = app.config.language
+        self._refresh_version()
 
         if app.error:
             self.name_lbl.configure(text=t("common.problem"))
@@ -778,6 +791,22 @@ class MainWindow(tk.Toplevel):
             self.grow_lbl.configure(text=t("ev.collection_complete"))
 
         self._render_office(events)
+
+    def _refresh_version(self) -> None:
+        app = self.app
+        version = app.available_version
+        if version:
+            result = t("updates.available", version=version)
+            self._update_message.configure(text=result)
+            self._update_link.configure(text=t("updates.download"))
+            if not self._update_row.winfo_manager():
+                self._update_row.pack(fill="x", padx=16, pady=(4, 0), before=self.event_lbl)
+        else:
+            self._update_row.pack_forget()
+            key = ("updates.checking" if app.version_checking else
+                   "updates.unavailable" if app.version_check_failed else "updates.current")
+            result = t(key)
+        self._version_details.configure(text=f"v{__version__} · {result}")
 
     def _render_office(self, events) -> None:
         game = self.app.game
