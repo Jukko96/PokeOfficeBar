@@ -14,7 +14,7 @@ Windows에서 일하는 동안 바탕화면의 작은 친구를 키우는 앱입
 
 - **육성** · 기존 PokeTokenBar의 1~5세대 포켓몬 649종과 일반·이로치 수집을 지원합니다.
 - **바탕화면** · 트레이나 포켓몬을 우클릭해 화면 전체 또는 작업 표시줄 위를 걷게 할 수 있습니다.
-- **선물과 향로** · 가져온 선물을 직접 받고, 향로로 졸업생을 부릅니다. 잠깐 변장이 풀리는 방문객을 누르면 안개씨를 발견하고 포인트를 받습니다.
+- **선물과 향로** · 가져온 선물을 직접 받고, 향로로 졸업생을 부릅니다. 변장한 메타몽은 가끔 본모습을 드러내며, 방문 중에 발견하면 포인트를 받습니다.
 - **가방** · 가지고 있는 아이템을 상점가의 절반에 팝니다. 수량을 고르거나 전부를 선택한 뒤 받을 포인트를 확인할 수 있습니다.
 - **화분과 탐험대** · 화분을 가꾸고, 졸업생을 다섯 목적지에 보내 돌아오면 보상을 받습니다.
 
@@ -55,4 +55,4 @@ py -m venv .venv
 
 [PokeTokenBar for Windows](https://github.com/NMHK-134711/PokeTokenBar-for-Windows)를 기반으로 했습니다. Windows판의 출발점은 [chattymin/PokeTokenBar](https://github.com/chattymin/PokeTokenBar)의 아이디어입니다. 기반 코드의 MIT 저작권 고지와 라이선스 전문은 [LICENSE](LICENSE)에 있습니다.
 
-도감과 스프라이트의 출처는 [PokéAPI](https://pokeapi.co/)입니다. 향로 아이콘은 [Pokémon GO 공식 자료](https://www.pokemon.com/static-assets/content-assets/cms2/img/video-games/_tiles/pokemon-go/2025/11/07/inline/05.png)에서 가져옵니다. 포켓몬 이미지와 데이터의 권리는 각 권리자에게 있으며, 기본 소스와 빌드에는 포켓몬 이미지 팩을 넣지 않습니다. 안개씨와 대체 아이콘은 `pokeofficebar/art.py`에서 그립니다. 선물 아이콘과 탐험 배경은 이 프로젝트용으로 생성한 이미지입니다.
+도감과 스프라이트의 출처는 [PokéAPI](https://pokeapi.co/)입니다. 향로 아이콘은 [Pokémon GO 공식 자료](https://www.pokemon.com/static-assets/content-assets/cms2/img/video-games/_tiles/pokemon-go/2025/11/07/inline/05.png)에서 가져옵니다. 포켓몬 이미지와 데이터의 권리는 각 권리자에게 있으며, 기본 소스와 빌드에는 포켓몬 이미지 팩을 넣지 않습니다. 대체 아이콘은 `pokeofficebar/art.py`에서 그립니다. 선물 아이콘과 탐험 배경은 이 프로젝트용으로 생성한 이미지입니다.

@@ -8,10 +8,10 @@ from random import choice, randint, random, uniform
 from time import monotonic
 
 from .app import ROAM_TASKBAR
-from .art import FOG_VISITOR_ID
 from .desktop import move_window, pet_window, pointer_work_area, prevent_activation
 from .ui import SpriteView
 
+DITTO_IDENTITY = (132, False)
 DISGUISE_CHANCE = 0.05
 DISGUISE_SQUASH_SECONDS = 0.2
 TRUE_FORM_SECONDS = 1.1
@@ -34,7 +34,7 @@ class Visitor(tk.Toplevel):
                                  matte=True, walking=True, bg="#010101")
         self.sprite.pack()
         self.sprite.set_overlay(gift)
-        self.sprite.show(*identity)
+        self._show_form()
         self.sprite.bind("<ButtonPress-1>", self._press)
         self.sprite.bind("<B1-Motion>", self._drag_to)
         self.sprite.bind("<ButtonRelease-1>", self._release)
@@ -87,15 +87,16 @@ class Visitor(tk.Toplevel):
         self._rest(now)
         if self._dragged or now >= self.expires:
             return "break"
-        if self.disguised and self._phase != "found":
+        if self._pressed_gift:
+            if self._hits_gift(event) and self.app.claim_visitor_gift(self.identity):
+                self.sprite.set_overlay(None)
+                self._show_form()
+        elif self.disguised and self._phase != "found":
             if (max(abs(event.x_root - press_x), abs(event.y_root - press_y)) <= 3
-                    and self.app.discover_fog_visitor()):
+                    and self.app.discover_ditto()):
                 self._phase = "found"
                 self._change_at = None
-                self.sprite.show(FOG_VISITOR_ID, False)
-        elif self._pressed_gift and self._hits_gift(event) and self.app.claim_visitor_gift(self.identity):
-            self.sprite.set_overlay(None)
-            self.sprite.show(*self.identity)
+                self._show_form()
         return "break"
 
     def tick(self, now: float) -> None:
@@ -104,17 +105,19 @@ class Visitor(tk.Toplevel):
                 self._rest(now)
                 self._phase = "squashed"
                 self._change_at = now + DISGUISE_SQUASH_SECONDS
-                self.sprite.show(*self.identity, squashed=True)
             elif self._phase == "squashed":
                 self._phase = "revealed"
                 self._change_at = now + TRUE_FORM_SECONDS
-                self.sprite.show(FOG_VISITOR_ID, False)
             else:
                 self._phase = "normal"
                 self._change_at = now + uniform(4, 8)
-                self.sprite.show(*self.identity)
+            self._show_form()
         if self._phase == "normal":
             self.walk(now)
+
+    def _show_form(self) -> None:
+        identity = DITTO_IDENTITY if self._phase in {"revealed", "found"} else self.identity
+        self.sprite.show(*identity, squashed=self._phase == "squashed")
 
     def _rest(self, now: float) -> None:
         self.target = None
@@ -171,6 +174,7 @@ class DesktopVisits:
         while len(self.visitors) > self.app.config.incense_max_visitors:
             self._remove(next(reversed(self.visitors)))
         if self.job is None:
+            self.app.frames(*DITTO_IDENTITY, self.app.config.pet_size)
             self._tick()
 
     def close(self):
@@ -227,7 +231,11 @@ class DesktopVisits:
                 if sid in species
             }
         available = list(graduates.difference(self.visitors))
+        disguised_present = any(visitor.disguised for visitor in self.visitors.values())
         for _ in range(min(slots, randint(1, 2))):
+            # Keep the normal Ditto slot available for the disguised visitor's reveal.
+            if disguised_present and DITTO_IDENTITY in available:
+                available.remove(DITTO_IDENTITY)
             if not available:
                 break
             identity = choice(available)
@@ -235,16 +243,19 @@ class DesktopVisits:
             if game.dex.sprite_path(*identity, fetch=False) is None:
                 self.app.frames(*identity, self.app.config.pet_size)
                 continue
-            disguise_open = not any(visitor.disguised for visitor in self.visitors.values())
-            disguised = disguise_open and random() < DISGUISE_CHANCE
+            disguise_open = (not disguised_present and DITTO_IDENTITY not in self.visitors
+                             and identity[0] != DITTO_IDENTITY[0])
+            disguised = (disguise_open and random() < DISGUISE_CHANCE
+                          and bool(self.app.frames(*DITTO_IDENTITY, self.app.config.pet_size)))
             gift = None
-            if not disguised and game.offer_visitor_gift(identity):
+            if game.offer_visitor_gift(identity):
                 gift = self.app.item_image("gift_box", 40)
                 if gift is None:
                     game.dismiss_visitor_gift(identity)
             try:
                 self.visitors[identity] = Visitor(self.root, self.app, identity, work, now, gift,
                                                   disguised=disguised)
+                disguised_present |= disguised
             except Exception:
                 game.dismiss_visitor_gift(identity)
                 raise

@@ -17,7 +17,7 @@ from time import monotonic
 from PIL import Image, ImageSequence
 from requests import RequestException
 
-from .art import FOG_VISITOR_ID, fog_visitor_frames, item_art
+from .art import item_art
 from .game import CandyUseNotice, Game
 from .i18n import set_lang, t
 from .persistence import atomic_json, read_json
@@ -321,9 +321,9 @@ class App:
         self._notify([message])
         return True
 
-    def discover_fog_visitor(self) -> bool:
+    def discover_ditto(self) -> bool:
         try:
-            message = self.game.reward_fog_visitor()
+            message = self.game.reward_ditto_visit()
         except OSError:
             logging.exception("Disguised visitor reward could not be saved")
             self.request_refresh([t("save.retry")])
@@ -499,27 +499,24 @@ class App:
     def frames(self, species_id: int, shiny: bool, size: int) -> list[Image.Image]:
         """Animated sprite frames, scaled with nearest-neighbour to stay crisp."""
         key = (species_id, shiny)
-        if species_id != FOG_VISITOR_ID and species_id not in self.dex.species:
+        if species_id not in self.dex.species:
             return []
         if key not in self._frame_cache:
-            if species_id == FOG_VISITOR_ID:
-                raw = fog_visitor_frames()
-            else:
-                path = self.dex.sprite_path(species_id, shiny, fetch=False)
-                if path is None:
-                    self._queue_image(("sprite", species_id, shiny))
-                    return []
-                try:
-                    with Image.open(path) as image:
-                        raw = [frame.convert("RGBA") for frame in ImageSequence.Iterator(image)]
-                except (OSError, ValueError):
-                    logging.warning("Invalid sprite: %s", path)
-                    return []
-                bounds = [box for frame in raw if (box := frame.getbbox()) is not None]
-                if bounds:
-                    box = (min(b[0] for b in bounds), min(b[1] for b in bounds),
-                           max(b[2] for b in bounds), max(b[3] for b in bounds))
-                    raw = [frame.crop(box) for frame in raw]
+            path = self.dex.sprite_path(species_id, shiny, fetch=False)
+            if path is None:
+                self._queue_image(("sprite", species_id, shiny))
+                return []
+            try:
+                with Image.open(path) as image:
+                    raw = [frame.convert("RGBA") for frame in ImageSequence.Iterator(image)]
+            except (OSError, ValueError):
+                logging.warning("Invalid sprite: %s", path)
+                return []
+            bounds = [box for frame in raw if (box := frame.getbbox()) is not None]
+            if bounds:
+                box = (min(b[0] for b in bounds), min(b[1] for b in bounds),
+                       max(b[2] for b in bounds), max(b[3] for b in bounds))
+                raw = [frame.crop(box) for frame in raw]
             self._frame_cache[key] = raw
             if len(self._frame_cache) > 32:
                 self._frame_cache.popitem(last=False)

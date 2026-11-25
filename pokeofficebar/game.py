@@ -69,7 +69,7 @@ OFFICE_POINT_SECONDS = 60
 GIFT_WAIT_RANGE = (2400, 5400)
 GIFT_SCHEDULE_VERSION = 2
 VISITOR_GIFT_CHANCE = 0.05
-FOG_VISITOR_POINTS = 3
+DITTO_VISITOR_POINTS = 3
 GIFT_ITEM_WEIGHTS = {"points": 82, "mint": 12, "rare_candy": 3, "incense": 3}
 OFFICE_HATCH_POINTS = 20
 OFFICE_GRADUATE_POINTS = 76
@@ -749,12 +749,12 @@ class Game:
         return message
 
     @_transaction
-    def reward_fog_visitor(self) -> str | None:
+    def reward_ditto_visit(self) -> str | None:
         if not self.initialized or not self.incense_status()[0]:
             return None
-        self.office_shop_bonus += FOG_VISITOR_POINTS
+        self.office_shop_bonus += DITTO_VISITOR_POINTS
         self.save()
-        return t("incense.disguise_found", points=FOG_VISITOR_POINTS)
+        return t("incense.disguise_found", points=DITTO_VISITOR_POINTS)
 
     @_transaction
     def claim_gift(self) -> str | None:

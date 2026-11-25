@@ -1,33 +1,9 @@
-"""Draw the original companion animations and item icons with Pillow."""
+"""Draw fallback item icons with Pillow."""
 
 from PIL import Image, ImageDraw
 
 INK = "#333044"
 HIGHLIGHT = "#fff8e7"
-FOG_VISITOR_ID = -1  # A desktop visitor without a collectible catalog entry.
-
-
-def fog_visitor_frames() -> list[Image.Image]:
-    """Draw the true form of a disguised visitor."""
-    frames = []
-    for index, rise in enumerate((0, 1, 2, 3, 3, 2, 1, 0)):
-        image = Image.new("RGBA", (56, 42))
-        draw = ImageDraw.Draw(image)
-        draw.ellipse((12, 35, 44, 39), fill="#728aa0")
-        draw.polygon(((4, 24 - rise), (9, 17 - rise), (17, 17 - rise),
-                      (22, 9 - rise), (30, 5 - rise), (38, 9 - rise),
-                      (41, 16 - rise), (47, 17 - rise), (52, 24 - rise),
-                      (49, 30 - rise), (42, 34 - rise), (16, 34 - rise),
-                      (8, 31 - rise)), fill="#9ddfd8", outline=INK, width=2)
-        draw.arc((16, 13 - rise, 37, 29 - rise), 197, 302, fill="#ecfffb", width=2)
-        draw.ellipse((22, 22 - rise, 25, 25 - rise), fill=INK)
-        if index == 6:
-            draw.line((33, 24 - rise, 36, 24 - rise), fill=INK, width=2)
-        else:
-            draw.ellipse((33, 22 - rise, 36, 25 - rise), fill=INK)
-        draw.arc((27, 24 - rise, 32, 29 - rise), 10, 170, fill=INK, width=2)
-        frames.append(image.crop((4, 2, 53, 40)))
-    return frames
 
 
 def item_art(key: str) -> Image.Image | None:
