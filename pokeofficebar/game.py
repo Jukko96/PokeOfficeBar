@@ -89,6 +89,13 @@ OFFICE_SHOP_PRICES = {
     "egg_uncommon": 60,
     "egg_rare": 160,
 }
+BAG_ITEM_FIELDS = {
+    "rare_candy": "candies",
+    "mint": "mints",
+    "incense": "incense",
+    "shiny_charm": "shiny_charms",
+    "soothe_bell": "soothe_bell",
+}
 
 # Minimum rarity guaranteed by each graded egg.
 EGG_FLOORS = {
@@ -714,7 +721,7 @@ class Game:
         if item == "points":
             self.office_shop_bonus += amount
             return t("gift.received", item=t("gift.points"), amount=amount)
-        attribute = {"mint": "mints", "rare_candy": "candies", "incense": "incense"}[item]
+        attribute = BAG_ITEM_FIELDS[item]
         setattr(self, attribute, getattr(self, attribute) + amount)
         return t("gift.received", item=t(f"item.{item}"), amount=amount)
 
@@ -860,6 +867,35 @@ class Game:
 
     # ---- bag & shop ------------------------------------------------
 
+    def bag_count(self, item: str) -> int:
+        return getattr(self, BAG_ITEM_FIELDS[item])
+
+    def sale_price(self, item: str) -> int:
+        return self.shop_prices[item] // 2
+
+    def _change_soothe_bells(self, quantity: int) -> None:
+        self.soothe_bell += quantity
+        if self.pending_gift is None:
+            remaining = max(0, self.gift_wait_seconds - self.gift_elapsed_seconds)
+            self.gift_wait_seconds = self.gift_elapsed_seconds + remaining / (2 ** quantity)
+
+    @_transaction
+    def sell(self, item: str, quantity: int) -> str:
+        if item not in BAG_ITEM_FIELDS:
+            return t("ev.unknown_item")
+        owned = self.bag_count(item)
+        if type(quantity) is not int or not 1 <= quantity <= owned:
+            return t("bag.sale.invalid_quantity")
+        points = self.sale_price(item) * quantity
+        if item == "soothe_bell":
+            self._change_soothe_bells(-quantity)
+        else:
+            setattr(self, BAG_ITEM_FIELDS[item], owned - quantity)
+        self.office_shop_bonus += points
+        self.save()
+        return t("bag.sale.sold", item=t(f"item.{item}"), quantity=format(quantity, ","),
+                 points=format(points, ","))
+
     @_transaction
     def use_candy(self) -> str | None:
         if self.candies <= 0:
@@ -935,18 +971,9 @@ class Game:
         if self.currency(total_points) < price:
             return t("ev.too_poor")
         if item == "soothe_bell":
-            old_spent, old_wait, old_count = self.spent, self.gift_wait_seconds, self.soothe_bell
             self.spent += price
-            self.soothe_bell += 1
-            if self.pending_gift is None:
-                remaining = max(0, self.gift_wait_seconds - self.gift_elapsed_seconds)
-                self.gift_wait_seconds = self.gift_elapsed_seconds + remaining / 2
-            try:
-                self.save()
-            except OSError:
-                self.spent, self.gift_wait_seconds = old_spent, old_wait
-                self.soothe_bell = old_count
-                raise
+            self._change_soothe_bells(1)
+            self.save()
             return t("ev.bell_bought")
         self.spent += price
 

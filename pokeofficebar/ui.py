@@ -481,6 +481,79 @@ class EggPurchaseDialog(tk.Toplevel):
         self.cancel.focus_set()
 
 
+class ItemSaleDialog(tk.Toplevel):
+    def __init__(self, master, item: str, owned: int, price: int, on_confirm):
+        super().__init__(master)
+        self.transient(master)
+        self.title(t("bag.sale.title"))
+        self.configure(bg=PANEL)
+        self.resizable(False, False)
+        self.bind("<Escape>", lambda _event: self.destroy())
+
+        body = tk.Frame(self, bg=PANEL)
+        body.pack(fill="both", padx=18, pady=16)
+        tk.Label(body, text=t(f"item.{item}"), bg=PANEL, fg=FG,
+                 font=("Segoe UI", 12, "bold")).pack(anchor="w")
+        tk.Label(body, text=t("bag.sale.stock", count=format(owned, ","), points=format(price, ",")),
+                 bg=PANEL, fg=MUTED).pack(anchor="w", pady=(3, 12))
+
+        controls = tk.Frame(body, bg=PANEL)
+        controls.pack(fill="x")
+        tk.Label(controls, text=t("bag.sale.quantity"), bg=PANEL, fg=FG).pack(side="left")
+        self.quantity = tk.StringVar(self, value="1")
+        amount = ttk.Spinbox(controls, from_=1, to=owned, textvariable=self.quantity, width=8)
+        amount.pack(side="left", padx=8)
+        self.select_all = ttk.Button(controls, text=t("bag.sale.all"), width=6,
+                                     command=lambda: self.quantity.set(str(owned)))
+        self.select_all.pack(side="left")
+
+        self.total = tk.Label(body, bg=PANEL, fg=ACCENT, font=("Segoe UI", 10, "bold"))
+        self.total.pack(anchor="w", pady=(10, 0))
+        if item in {"shiny_charm", "soothe_bell"}:
+            tk.Label(body, text=t(f"bag.sale.{item}"), bg=PANEL, fg=MUTED,
+                     wraplength=300, justify="left").pack(anchor="w", pady=(5, 0))
+
+        actions = tk.Frame(body, bg=PANEL)
+        actions.pack(fill="x", pady=(14, 0))
+
+        def selected_quantity() -> int | None:
+            try:
+                quantity = int(self.quantity.get())
+            except ValueError:
+                return None
+            return quantity if 1 <= quantity <= owned else None
+
+        def confirm():
+            quantity = selected_quantity()
+            if quantity is not None:
+                self.destroy()
+                on_confirm(quantity)
+
+        self.confirm = _action(actions, t("bag.sale.confirm"), confirm, enabled=True)
+        self.confirm.pack(side="right")
+        ttk.Button(actions, text=t("bag.sale.cancel"), command=self.destroy, width=6).pack(
+            side="right", padx=(0, 8))
+
+        def refresh_total(*_args):
+            quantity = selected_quantity()
+            if quantity is None:
+                self.total.configure(text=t("bag.sale.invalid_quantity"), fg=MUTED)
+                self.confirm.configure(state="disabled", bg="#33363f")
+            else:
+                self.total.configure(text=t("bag.sale.total", points=format(quantity * price, ",")), fg=ACCENT)
+                self.confirm.configure(state="normal", bg=ACCENT)
+
+        self.quantity.trace_add("write", refresh_total)
+        refresh_total()
+        self.update_idletasks()
+        x = master.winfo_rootx() + (master.winfo_width() - self.winfo_reqwidth()) // 2
+        y = master.winfo_rooty() + (master.winfo_height() - self.winfo_reqheight()) // 2
+        self.geometry(f"+{max(0, x)}+{max(0, y)}")
+        self.grab_set()
+        amount.focus_set()
+        amount.selection_range(0, "end")
+
+
 class MainWindow(tk.Toplevel):
     def __init__(self, master, app) -> None:
         super().__init__(master)
@@ -490,6 +563,8 @@ class MainWindow(tk.Toplevel):
         self._dex_page = 0
         self._incense_status = None
         self._egg_dialog = None
+        self._sale_dialog: ItemSaleDialog | None = None
+        self._bag_feedback = ("", GOOD)
         self.title(t("app.title"))
         self.configure(bg=BG)
         self.geometry("520x700")
@@ -746,6 +821,8 @@ class MainWindow(tk.Toplevel):
         self.focus_force()
 
     def hide(self) -> None:
+        if self._sale_dialog is not None:
+            self._sale_dialog.destroy()
         self.withdraw()
 
     @_game_view
@@ -827,6 +904,7 @@ class MainWindow(tk.Toplevel):
         self._render_bag()
         for event in events:
             if isinstance(event, CandyUseNotice):
+                self._bag_feedback = (event, GOOD)
                 self.bag_msg.configure(text=event)
         self._render_shop()
 
@@ -1370,42 +1448,32 @@ class MainWindow(tk.Toplevel):
 
         tk.Label(wrap, text=t("bag.title"), bg=PANEL, fg=FG,
                  font=("Segoe UI", 11, "bold"), anchor="w").pack(fill="x", pady=(0, 10))
-        self.bag_msg = tk.Label(wrap, text="", bg=PANEL, fg=GOOD,
+        message, color = self._bag_feedback
+        self.bag_msg = tk.Label(wrap, text=message, bg=PANEL, fg=color,
                                 font=("Segoe UI", 9), anchor="w", wraplength=380,
                                 justify="left")
 
-        def use(fn):
-            def handler():
-                try:
-                    msg = fn() or t("bag.none")
-                except OSError:
-                    self.bag_msg.configure(text=t("save.retry"), fg="#e0665f")
-                    return
-                # Successful candy use already queues a refresh for every surface.
-                if not isinstance(msg, CandyUseNotice):
-                    self.render([])
-                self.bag_msg.configure(text=msg)
-            return handler
-
-        for key, count, desc, fn in (
-            ("rare_candy", game.candies, t("item.rare_candy.office.desc"), self.app.use_candy),
-            ("mint", game.mints, t("item.mint.desc"), game.use_mint),
-            ("incense", game.incense, t("item.incense.bag.desc"), game.use_incense),
+        for key, desc, fn in (
+            ("rare_candy", t("item.rare_candy.office.desc"), self.app.use_candy),
+            ("mint", t("item.mint.desc"), game.use_mint),
+            ("incense", t("item.incense.bag.desc"), game.use_incense),
         ):
+            count = game.bag_count(key)
             row = tk.Frame(wrap, bg="#2a2d38")
             row.pack(fill="x", pady=4)
             self._icon_label(row, key, ITEM_ICON, "#2a2d38").pack(
                 side="left", padx=(10, 8), pady=8)
+            enabled = bool(count) and not (key == "rare_candy" and game.collection_complete)
+            _action(row, t("bag.use"), lambda fn=fn: self._bag_action(fn), enabled=enabled).pack(
+                side="right", padx=(5, 8), pady=6)
+            self._bag_sale_button(row, key).pack(side="right", padx=(4, 0), pady=6)
             text = tk.Frame(row, bg="#2a2d38")
             text.pack(side="left", fill="x", expand=True)
             tk.Label(text, text=f"{t('item.' + key)}  \u00d7{count}", bg="#2a2d38",
                      fg=FG, font=("Segoe UI", 10, "bold"), anchor="w").pack(fill="x")
             tk.Label(text, text=desc, bg="#2a2d38", fg=MUTED,
                      font=("Segoe UI", 8), anchor="w", justify="left",
-                     wraplength=270 if key == "incense" else 0).pack(fill="x")
-            enabled = bool(count) and not (key == "rare_candy" and game.collection_complete)
-            _action(row, t("bag.use"), use(fn), enabled=enabled).pack(
-                side="right", padx=10, pady=6)
+                     wraplength=205).pack(fill="x")
 
         incense = tk.Frame(wrap, bg=PANEL)
         incense.pack(fill="x", pady=(4, 0))
@@ -1419,18 +1487,60 @@ class MainWindow(tk.Toplevel):
         charm = tk.Frame(wrap, bg=PANEL)
         charm.pack(fill="x", pady=(12, 0))
         self._icon_label(charm, "shiny_charm", 24, PANEL).pack(side="left", padx=(0, 6))
+        self._bag_sale_button(charm, "shiny_charm").pack(side="right")
         tk.Label(charm, text=t("bag.charms", n=game.shiny_charms,
                                chance=f"{100 / game.shiny_odds():.1f}"),
-                 bg=PANEL, fg=MUTED, font=("Segoe UI", 9), anchor="w").pack(side="left")
+                 bg=PANEL, fg=MUTED, font=("Segoe UI", 9), anchor="w",
+                 wraplength=265, justify="left").pack(side="left", fill="x", expand=True)
         bell = tk.Frame(wrap, bg=PANEL)
         bell.pack(fill="x", pady=(10, 0))
         self._icon_label(bell, "soothe_bell", 24, PANEL).pack(side="left", padx=(0, 6))
+        self._bag_sale_button(bell, "soothe_bell").pack(side="right")
         low, high = game.gift_wait_range
         tk.Label(bell, text=t("bag.soothe_bell", n=game.soothe_bell,
                               low=_duration(low), high=_duration(high)), bg=PANEL, fg=MUTED,
-                 font=("Segoe UI", 9), anchor="w", wraplength=340,
-                 justify="left").pack(side="left")
+                 font=("Segoe UI", 9), anchor="w", wraplength=265,
+                 justify="left").pack(side="left", fill="x", expand=True)
         self.bag_msg.pack(fill="x", pady=(10, 0))
+
+    def _bag_action(self, action) -> None:
+        try:
+            message = action() or t("bag.none")
+        except OSError:
+            self._bag_feedback = (t("save.retry"), "#e0665f")
+            self.bag_msg.configure(text=self._bag_feedback[0], fg=self._bag_feedback[1])
+            return
+        self._bag_feedback = (message, GOOD)
+        # Successful candy use already queues a refresh for every surface.
+        if not isinstance(message, CandyUseNotice):
+            self.render([])
+        self.bag_msg.configure(text=message, fg=GOOD)
+
+    def _bag_sale_button(self, parent, item: str) -> tk.Button:
+        game = self.app.game
+        price = format(game.sale_price(item), ",")
+        button = _action(parent, t("bag.sale.button", points=price), lambda: self._sell_item(item),
+                         enabled=game.bag_count(item) > 0)
+        button.configure(width=0, padx=8)
+        return button
+
+    def _sell_item(self, item: str) -> None:
+        if self._sale_dialog is not None:
+            self._sale_dialog.lift()
+            return
+        game = self.app.game
+        count = game.bag_count(item)
+        if count <= 0:
+            return
+        dialog = ItemSaleDialog(self, item, count, game.sale_price(item),
+                                lambda quantity: self._bag_action(lambda: game.sell(item, quantity)))
+        self._sale_dialog = dialog
+
+        def forget(event):
+            if event.widget is dialog:
+                self._sale_dialog = None
+
+        dialog.bind("<Destroy>", forget)
 
     def refresh_incense(self) -> None:
         if self._incense_status is None:
