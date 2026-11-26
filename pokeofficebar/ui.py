@@ -836,11 +836,9 @@ class MainWindow(tk.Toplevel):
 
     def _label_incense_crowd(self) -> None:
         self._incense_crowd_label.configure(text=t("set.incense_crowd"))
-        values = tuple(t("set.incense_crowd.option", preset=t(f"set.incense_crowd.{preset}"),
-                         count=limit, low=low, high=high)
-                       for preset, (limit, (low, high)) in INCENSE_PRESETS.items())
-        self._incense_crowd_menu.configure(values=values)
-        self._incense_crowd_menu.current(tuple(INCENSE_PRESETS).index(self.app.config.incense_crowd))
+        presets = tuple(INCENSE_PRESETS)
+        self._incense_crowd_menu.configure(values=tuple(t(f"set.incense_crowd.{preset}") for preset in presets))
+        self._incense_crowd_menu.current(presets.index(self.app.config.incense_crowd))
 
     def _retitle(self) -> None:
         """Re-label window chrome after a language change."""

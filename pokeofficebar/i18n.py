@@ -302,8 +302,6 @@ STRINGS: dict[str, dict[str, str]] = {
     "set.incense_crowd.normal": {"ko": "보통", "en": "Normal"},
     "set.incense_crowd.many": {"ko": "많이", "en": "Many"},
     "set.incense_crowd.swarm": {"ko": "우르르", "en": "Swarm"},
-    "set.incense_crowd.option": {"ko": "{preset} · 최대 {count}마리 · {low}~{high}초 간격",
-                                  "en": "{preset} · Up to {count} visitors · Every {low}–{high}s"},
     "set.pet":          {"ko": "데스크톱 펫 띄우기", "en": "Show floating desktop pet"},
     "set.startup":      {"ko": "Windows 로그인 시 자동 시작", "en": "Start automatically when I sign in to Windows"},
     "set.startup_failed": {"ko": "Windows 자동 시작을 적용하지 못했습니다. 설치 경로와 시작 앱 설정을 확인해 주세요.",
