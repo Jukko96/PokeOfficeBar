@@ -17,6 +17,7 @@ from time import monotonic
 from PIL import Image, ImageSequence
 from requests import RequestException
 
+from . import __version__
 from .art import item_art
 from .game import CandyUseNotice, Game
 from .i18n import set_lang, t
@@ -26,6 +27,12 @@ from .startup import set_startup
 from .updates import StagedUpdate, check_for_update, discard_stage, download_update
 
 ROAM_OFF, ROAM_SCREEN, ROAM_TASKBAR = "off", "screen", "taskbar"
+INCENSE_PRESETS = {
+    "few": (5, (6, 14)),
+    "normal": (10, (4, 8)),
+    "many": (12, (2, 5)),
+    "swarm": (30, (1, 2)),
+}
 WORK_TIMES = {
     "work_start_time": "09:00", "lunch_time": "12:00",
     "work_resume_time": "13:00", "work_end_time": "18:00",
@@ -84,6 +91,32 @@ def asset_dir() -> Path:
     return Path(base) / "assets" if base else Path(__file__).resolve().parent / "assets"
 
 
+def read_patch_notes() -> tuple[str, ...]:
+    """Read the installed version's bullet list from the release README."""
+    base = getattr(sys, "_MEIPASS", None)
+    folder = Path(base) if base else Path(__file__).resolve().parent.parent
+    try:
+        lines = (folder / "README.md").read_text(encoding="utf-8-sig").splitlines()
+    except (OSError, UnicodeError):
+        return ()
+
+    in_patch_notes = False
+    current_version = False
+    bullets = []
+    for line in lines:
+        if line.startswith("## "):
+            if in_patch_notes:
+                break
+            in_patch_notes = line.strip() == "## 패치 노트"
+        elif in_patch_notes and line.startswith("### "):
+            if current_version:
+                break
+            current_version = line.strip() == f"### v{__version__}"
+        elif current_version and line.startswith("- ") and line[2:].strip():
+            bullets.append(line[2:].strip())
+    return tuple(bullets)
+
+
 _EGG_CACHE: dict[tuple[int, bool], Image.Image] = {}
 
 
@@ -135,7 +168,7 @@ class Config:
     work_end_time: str = WORK_TIMES["work_end_time"]
     pet_roam_mode: str = ROAM_OFF
     pet_size: int = 96
-    incense_max_visitors: int = 5
+    incense_crowd: str = "normal"
     # Where the user dragged the pet. -1 means "pick a default corner"; storing
     # it keeps the pet put across restarts and sidesteps display-scaling maths.
     pet_x: int = -1
@@ -162,7 +195,13 @@ class Config:
                 known = {k: v for k, v in raw.items() if k in cls.__annotations__
                          and type(v) is type(getattr(defaults, k))}
                 known["pet_size"] = max(48, min(192, known.get("pet_size", defaults.pet_size)))
-                known["incense_max_visitors"] = max(1, known.get("incense_max_visitors", defaults.incense_max_visitors))
+                if known.get("incense_crowd") not in INCENSE_PRESETS:
+                    old_max = raw.get("incense_max_visitors")
+                    known["incense_crowd"] = defaults.incense_crowd
+                    # An unchanged old default follows the new default.
+                    if type(old_max) is int and old_max > 0 and old_max != 5:
+                        known["incense_crowd"] = min(
+                            INCENSE_PRESETS, key=lambda preset: abs(INCENSE_PRESETS[preset][0] - old_max))
                 has_resume_time = normalize_work_time(known.get("work_resume_time", "")) is not None
                 for key, default in WORK_TIMES.items():
                     known[key] = normalize_work_time(known.get(key, default)) or default

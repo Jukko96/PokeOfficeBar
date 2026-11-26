@@ -7,7 +7,7 @@ from math import hypot
 from random import choice, randint, random, uniform
 from time import monotonic
 
-from .app import ROAM_TASKBAR
+from .app import INCENSE_PRESETS, ROAM_TASKBAR
 from .desktop import move_window, pet_window, pointer_work_area, prevent_activation
 from .ui import SpriteView
 
@@ -171,7 +171,8 @@ class DesktopVisits:
         if not self.app.ready or not self.app.game.incense_status()[0]:
             self.close()
             return
-        while len(self.visitors) > self.app.config.incense_max_visitors:
+        maximum, _ = INCENSE_PRESETS[self.app.config.incense_crowd]
+        while len(self.visitors) > maximum:
             self._remove(next(reversed(self.visitors)))
         if self.job is None:
             self.app.frames(*DITTO_IDENTITY, self.app.config.pet_size)
@@ -210,11 +211,13 @@ class DesktopVisits:
         if self.arrival is None:
             self.arrival = now + uniform(1, 3)
         elif now >= self.arrival:
-            self.arrival = now + uniform(6, 14)
+            _, interval = INCENSE_PRESETS[self.app.config.incense_crowd]
+            self.arrival = now + uniform(*interval)
             self._arrive(now)
 
     def _arrive(self, now):
-        slots = self.app.config.incense_max_visitors - len(self.visitors)
+        maximum, _ = INCENSE_PRESETS[self.app.config.incense_crowd]
+        slots = maximum - len(self.visitors)
         if slots <= 0:
             return
         work = pointer_work_area()

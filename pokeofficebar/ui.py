@@ -20,7 +20,8 @@ from tkinter import ttk
 from PIL import Image, ImageFilter, ImageOps, ImageTk
 
 from . import __version__
-from .app import ROAM_OFF, ROAM_TASKBAR, WORK_TIMES, asset_dir, normalize_work_time
+from .app import (INCENSE_PRESETS, ROAM_OFF, ROAM_TASKBAR, WORK_TIMES,
+                  asset_dir, normalize_work_time, read_patch_notes)
 from .desktop import move_window, pet_window, pointer_over, prevent_activation
 from .game import (
     BERRY_POT_COUNT, BERRY_POT_PRICE, CandyUseNotice, EGG_FLOORS, EXPEDITION_DESTINATIONS,
@@ -618,8 +619,9 @@ class MainWindow(tk.Toplevel):
     # ---- home ------------------------------------------------------
 
     def _build_home(self) -> None:
+        body = self._scrollable(self.home)
         pad = {"padx": 16}
-        top = tk.Frame(self.home, bg=PANEL)
+        top = tk.Frame(body, bg=PANEL)
         top.pack(fill="x", pady=(16, 8), **pad)
 
         self.sprite = SpriteView(top, self.app, size=96)
@@ -640,13 +642,13 @@ class MainWindow(tk.Toplevel):
                                  font=("Segoe UI", 8), anchor="w")
         self.grow_lbl.pack(fill="x", pady=(3, 0))
 
-        self.line_lbl = tk.Label(self.home, text="", bg=PANEL, fg=MUTED,
+        self.line_lbl = tk.Label(body, text="", bg=PANEL, fg=MUTED,
                                  font=("Segoe UI", 9), anchor="w")
         self.line_lbl.pack(fill="x", pady=(0, 10), **pad)
 
-        tk.Frame(self.home, bg="#2a2d38", height=1).pack(fill="x", **pad)
+        tk.Frame(body, bg="#2a2d38", height=1).pack(fill="x", **pad)
 
-        stats = tk.Frame(self.home, bg=PANEL)
+        stats = tk.Frame(body, bg=PANEL)
         stats.pack(fill="x", pady=(8, 12), **pad)
         self.today_lbl = tk.Label(stats, text="-", bg=PANEL, fg=FG,
                                   font=("Segoe UI", 26, "bold"), anchor="w")
@@ -655,25 +657,46 @@ class MainWindow(tk.Toplevel):
                                   font=("Segoe UI", 9), anchor="w")
         self.today_sub.pack(fill="x")
 
-        self.totals_lbl = tk.Label(self.home, bg=PANEL, fg=MUTED,
+        self.totals_lbl = tk.Label(body, bg=PANEL, fg=MUTED,
                                    font=("Segoe UI", 9), anchor="w")
         self.totals_lbl.pack(fill="x", padx=16, pady=8)
         gift = self.app.item_image("gift_box", 32)
         self._gift_image = ImageTk.PhotoImage(gift) if gift is not None else None
         self.gift_button = tk.Button(
-            self.home, text=t("gift.claim"), command=self.app.claim_gift,
+            body, text=t("gift.claim"), command=self.app.claim_gift,
             image=self._gift_image, compound="left", padx=12, pady=5,
             bg=ACCENT, fg=BG, relief="flat", cursor="hand2", font=("Segoe UI", 11, "bold"),
         )
-        self.event_lbl = tk.Label(self.home, bg=PANEL, fg=GOOD, wraplength=420,
+        self.event_lbl = tk.Label(body, bg=PANEL, fg=GOOD, wraplength=420,
                                   justify="left", font=("Segoe UI", 9), anchor="w")
         self.event_lbl.pack(fill="x", padx=16, pady=10)
-        self._update_row = tk.Frame(self.home, bg=PANEL)
+        body.bind("<Configure>", lambda event: self.event_lbl.configure(
+            wraplength=max(1, min(420, event.width - 32))), add="+")
+        self._update_row = tk.Frame(body, bg=PANEL)
         self._update_message = tk.Label(self._update_row, bg=PANEL, fg=ACCENT, anchor="w")
         self._update_message.pack(side="left", fill="x", expand=True)
         self._update_link = _action(self._update_row, "", lambda: webbrowser.open(RELEASES_PAGE), True)
         self._update_link.configure(width=0, padx=8)
         self._update_link.pack(side="right")
+        self._build_patch_notes(body)
+
+    def _build_patch_notes(self, parent) -> None:
+        self._patch_notes = read_patch_notes()
+        card = tk.Frame(parent, bg="#2a2d38")
+        card.pack(fill="x", padx=16, pady=(4, 12))
+        self._patch_heading = tk.Label(card, bg="#2a2d38", fg=FG, anchor="w",
+                                       font=("Segoe UI", 10, "bold"))
+        self._patch_heading.pack(fill="x", padx=12, pady=(9, 4))
+        self._patch_text = tk.Label(card, bg="#2a2d38", fg=FG, font=("Segoe UI", 9),
+                                    anchor="w", justify="left", wraplength=360)
+        self._patch_text.pack(fill="x", padx=12, pady=(0, 9))
+        card.bind("<Configure>", lambda event: self._patch_text.configure(wraplength=max(1, event.width - 24)))
+        self._render_patch_notes()
+
+    def _render_patch_notes(self) -> None:
+        self._patch_heading.configure(text=f"{t('patch_notes.title')} · v{__version__}")
+        text = "\n".join(f"• {line}" for line in self._patch_notes) or t("patch_notes.empty")
+        self._patch_text.configure(text=text)
 
     # ---- settings --------------------------------------------------
 
@@ -687,7 +710,6 @@ class MainWindow(tk.Toplevel):
             "start_with_windows": tk.BooleanVar(value=cfg.start_with_windows),
             "work_timer_enabled": tk.BooleanVar(value=cfg.work_timer_enabled),
             "pet_size": tk.StringVar(value=str(cfg.pet_size)),
-            "incense_max_visitors": tk.StringVar(value=str(cfg.incense_max_visitors)),
         }
         self.vars.update({key: tk.StringVar(value=getattr(cfg, key)) for key in WORK_TIMES})
 
@@ -702,7 +724,12 @@ class MainWindow(tk.Toplevel):
                          justify="left").pack(fill="x", pady=(2, 0))
 
         field(t("set.petsize"), "pet_size", t("set.petsize.hint"))
-        field(t("set.incense_max_visitors"), "incense_max_visitors")
+        self._incense_crowd_label = tk.Label(wrap, bg=PANEL, fg=FG, anchor="w",
+                                            font=("Segoe UI", 9, "bold"))
+        self._incense_crowd_label.pack(fill="x", pady=(10, 2))
+        self._incense_crowd_menu = ttk.Combobox(wrap, style="Poke.TCombobox", state="readonly")
+        self._incense_crowd_menu.pack(fill="x", ipady=3)
+        self._label_incense_crowd()
 
         for variable, label in (("floating_pet", "set.pet"), ("start_with_windows", "set.startup")):
             tk.Checkbutton(
@@ -767,10 +794,12 @@ class MainWindow(tk.Toplevel):
         cfg = replace(self.app.config)
         try:
             cfg.pet_size = max(48, min(192, int(self.vars["pet_size"].get())))
-            cfg.incense_max_visitors = max(1, int(self.vars["incense_max_visitors"].get()))
         except ValueError:
             self.settings_msg.configure(text=t("set.numbers"), fg="#e0665f")
             return
+        selection = self._incense_crowd_menu.current()
+        if selection >= 0:
+            cfg.incense_crowd = tuple(INCENSE_PRESETS)[selection]
         cfg.floating_pet = self.vars["floating_pet"].get()
         cfg.start_with_windows = self.vars["start_with_windows"].get()
         cfg.work_timer_enabled = self.vars["work_timer_enabled"].get()
@@ -793,7 +822,6 @@ class MainWindow(tk.Toplevel):
             return
         self.app.config = cfg
         self.app.sync_windows_startup()
-        self.vars["incense_max_visitors"].set(str(cfg.incense_max_visitors))
         for key in WORK_TIMES:
             self.vars[key].set(getattr(cfg, key))
         self._retitle()
@@ -806,12 +834,22 @@ class MainWindow(tk.Toplevel):
         for key, widget in self._work_timer_labels.items():
             widget.configure(text=t(key))
 
+    def _label_incense_crowd(self) -> None:
+        self._incense_crowd_label.configure(text=t("set.incense_crowd"))
+        values = tuple(t("set.incense_crowd.option", preset=t(f"set.incense_crowd.{preset}"),
+                         count=limit, low=low, high=high)
+                       for preset, (limit, (low, high)) in INCENSE_PRESETS.items())
+        self._incense_crowd_menu.configure(values=values)
+        self._incense_crowd_menu.current(tuple(INCENSE_PRESETS).index(self.app.config.incense_crowd))
+
     def _retitle(self) -> None:
         """Re-label window chrome after a language change."""
         self.title(t("app.title"))
         for i, (_frame, key) in enumerate(self._tabs):
             self.nb.tab(i, text=t(key))
         self._label_work_timer()
+        self._label_incense_crowd()
+        self._render_patch_notes()
 
     # ---- rendering -------------------------------------------------
 

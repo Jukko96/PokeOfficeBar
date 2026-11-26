@@ -117,6 +117,7 @@ def main() -> int:
         "--name", name,
         "--icon", str(icon),
         "--add-data", f"{ROOT / 'LICENSE'}:.",
+        "--add-data", f"{ROOT / 'README.md'}:.",
         "--add-data", f"{ROOT / 'pokeofficebar' / 'assets' / 'gift-box.png'}:assets",
         "--add-data", f"{ROOT / 'pokeofficebar' / 'assets' / 'expeditions'}:assets/expeditions",
         # pystray and Pillow pick their backends at runtime, so PyInstaller's
